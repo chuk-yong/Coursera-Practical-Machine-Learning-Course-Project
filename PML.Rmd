@@ -1,0 +1,115 @@
+---
+title: "Practical Machine Learning Week 4 Project"
+author: "Chuk Yong"
+date: "17 June 2018"
+output: html_document
+---
+
+## Barbell Lift Movement Analysis
+
+### Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement - a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. More information is available from the website here: http://groupware.les.inf.puc-rio.br/har (see the section on the Weight Lifting Exercise Dataset).
+
+Read more: http://groupware.les.inf.puc-rio.br/har#ixzz3xsbS5bVX
+
+The training data for this project are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+The test data are available here:
+
+https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+The data for this project comes from http://groupware.les.inf.puc-rio.br/har. Full source: Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. "Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13)". Stuttgart, Germany: ACM SIGCHI, 2013.
+
+Special thanks to the above mentioned authors for sharing their data.
+
+## Start of Data Analysis
+### 1. Load and Clean Data
+
+```{r loadData, message=FALSE, warning=FALSE}
+library(readr)
+library(dplyr)
+pml_training <- read_csv("D:/Coursera Data Science/Practical Machine Learning/week 4 project/pml-training.csv")
+pml_testing <- read_csv("D:/Coursera Data Science/Practical Machine Learning/week 4 project/pml-testing.csv")
+# Cleaning Data
+NAcolumns <- colnames(pml_training[,which(colMeans(is.na(pml_training)) > 0.5)]) # Find columns with more than 50% NAs in them.
+pml_training <- pml_training %>% select(-one_of(NAcolumns)) %>% filter(complete.cases(.)) # remove columns and rows with NA
+pml_training <- select(pml_training,-(1:7)) # remove first 7 columns as they do not contain information needed for our analysis
+# Do the same for testing data
+pml_testing <- pml_testing %>% select(-one_of(NAcolumns)) %>% filter(complete.cases(.))
+pml_testing <- select(pml_testing,-(1:7))
+
+```
+### 2. Learning on Training Data
+```{r trainData, message=FALSE, warning=FALSE}
+library(caret)
+set.seed(1688)
+# Subset training data set so that we can train and test our predictors
+inTrain <- createDataPartition(pml_training$classe, p=0.7, list = FALSE)
+training <- pml_training[inTrain,]
+testing <- pml_training[-inTrain,]
+
+# Create a data frame to store overall accuracies for comparison
+Accuracy <- data.frame(matrix(ncol = 3, nrow = 1))
+colnames(Accuracy) <- c("DecisionTree", "RandomForest", "GBM")
+
+# We will use 3 classification methods and compare their accuracy: Decision Tree, Random Forest and Generalized Boosted Regression Model (GBM)
+# Start Decision Tree
+library(rpart)
+library(rpart.plot)
+library(e1071)
+modFitTree <- rpart(classe ~., data = training, method = "class")
+predTree <- predict(modFitTree, newdata = testing, type = "class")
+confTree <- confusionMatrix(predTree, as.factor(testing$classe))
+Accuracy$DecisionTree <- as.numeric(confTree$overall['Accuracy'])
+```
+### Decision Tree Plot
+```{r plotDecisionTree, message=FALSE, warning=FALSE}
+rpart.plot(modFitTree,tweak = 1.2, cex=0.3)
+```
+  
+#### Accuracy of Decision Tree
+```{r confTree}
+confTree
+```
+  
+### Random Forest Analysis
+```{r randomForest,message=FALSE, warning=FALSE}
+modFitRF <- train(classe ~., data = training, method = "rf")
+predRF <- predict(modFitRF, newdata = testing)
+confRF <- confusionMatrix(predRF, as.factor(testing$classe))
+Accuracy$RandomForest <- as.numeric(confRF$overall['Accuracy'])
+```
+#### Accuracy of Random Forest
+```{r}
+confRF
+```
+  
+### GBM Analysis
+```{r GMB,message=FALSE, warning=FALSE}
+modFitGBM  <- train(classe ~ ., data=training, method = "gbm",verbose = FALSE)
+predGBM <- predict(modFitGBM, newdata = testing)
+confGBM <- confusionMatrix(predGBM, as.factor(testing$classe))
+Accuracy$GBM <- as.numeric(confGBM$overall['Accuracy'])
+```
+  
+#### Accuracy of GBM
+```{r}
+confGBM
+```
+
+### Model Selection
+#### How did the models compared?
+```{r}
+Accuracy
+```
+As we can see, Random Forest has the highiest accuracy rate, followed closely by GBM. We shall use Random Forest as our predictor on the test data.
+
+### Prediction on Test Data Set
+Here are the results of our prediction with the data from the testing set:
+```{r Predict, message=FALSE, warning=FALSE}
+predFinal <- predict(modFitRF, newdata=pml_testing)
+predFinal
+```
+ 
